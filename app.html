@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></link>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            overflow: hidden;
+        }
+        #chat-window { scroll-behavior: smooth; }
+        .chat-bubble { transition: all 0.4s ease-in-out; }
+        .ai-typing-indicator span { animation: bounce 1.4s infinite ease-in-out both; }
+        .ai-typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .ai-typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+        
+        .voice-animation-wave {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); border-radius: 50%;
+            border: 2px solid rgba(96, 165, 250, 0.8);
+            animation: pulse-ring 2s ease-out infinite;
+        }
+        @keyframes pulse-ring {
+            0% { width: 30px; height: 30px; opacity: 0.8; }
+            100% { width: 80vw; height: 80vw; opacity: 0; }
+        }
+        .voice-animation-wave:nth-child(2) { animation-delay: 0.5s; }
+        .voice-animation-wave:nth-child(3) { animation-delay: 1s; }
+
+        .message-toolbar { opacity: 0; transition: opacity 0.3s ease-in-out; }
+        .chat-bubble:hover .message-toolbar { opacity: 1; }
+        
+        .modal, .sidebar, .overlay { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .modal-content-wrapper { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #4f46e5; }
+        input:checked + .slider:before { transform: translateX(26px); }
+
+        #chat-window::-webkit-scrollbar { width: 8px; }
+        #chat-window::-webkit-scrollbar-track { background: #f1f1f1; }
+        #chat-window::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        #chat-window::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        #splash-screen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background-color: #111827;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease-out, visibility 0.8s;
+            opacity: 1;
+            visibility: visible;
+        }
+        #splash-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        .splash-logo {
+            font-size: 3rem;
+            color: white;
+            font-weight: bold;
+            letter-spacing: 0.5rem;
+            text-shadow: 0 0 15px rgba(79, 70, 229, 0.7);
+            animation: fadeInAndPulse 3s ease-in-out forwards;
+        }
+        @keyframes fadeInAndPulse {
+            0% { opacity: 0; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.05); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    
+    <div id="splash-screen">
+        <div class="splash-logo">J.A.R.V.I.S.</div>
+    </div>
+
+    <div id="login-container" class="hidden w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-2xl">
+         <div class="text-center">
+            <i class="fa-solid fa-brain text-5xl text-indigo-600 mb-3"></i>
+            <h1 class="text-3xl font-bold text-gray-800">Welcome to J.A.R.V.I.S.</h1>
+            <p class="text-gray-500">Your Personal AI Assistant</p>
+        </div>
+        <form id="login-form" class="space-y-4">
+            <div>
+                <label for="name-input" class="text-sm font-medium text-gray-700">Name</label>
+                <input type="text" id="name-input" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label for="email-input" class="text-sm font-medium text-gray-700">Email</label>
+                <input type="email" id="email-input" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Start Chatting
+            </button>
+        </form>
+    </div>
+
+    <div id="chat-container" class="hidden w-full max-w-3xl h-[95vh] flex flex-col bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
+        <div id="sidebar" class="sidebar fixed top-0 left-0 h-full w-64 bg-gray-900 text-white p-6 transform -translate-x-full z-50">
+            <button id="close-btn" class="absolute top-4 right-4 text-3xl hover:text-gray-400">&times;</button>
+            <h2 class="text-2xl font-bold mb-8 flex items-center gap-3"><i class="fa-solid fa-bars"></i> Menu</h2>
+            <nav class="flex flex-col space-y-2">
+                <a href="#" class="sidebar-link text-lg hover:bg-gray-700 p-3 rounded-lg flex items-center gap-4" data-section="about"><i class="fa-solid fa-circle-info w-6 text-center"></i> About</a>
+                <a href="#" class="sidebar-link text-lg hover:bg-gray-700 p-3 rounded-lg flex items-center gap-4" data-section="reminders"><i class="fa-solid fa-bell w-6 text-center"></i> Reminders</a>
+                <a href="#" class="sidebar-link text-lg hover:bg-gray-700 p-3 rounded-lg flex items-center gap-4" data-section="history"><i class="fa-solid fa-clock-rotate-left w-6 text-center"></i> History</a>
+                <a href="#" class="sidebar-link text-lg hover:bg-gray-700 p-3 rounded-lg flex items-center gap-4" data-section="owner"><i class="fa-solid fa-user-tie w-6 text-center"></i> Owner</a>
+                <a href="#" id="logout-btn" class="text-lg hover:bg-red-500 hover:bg-opacity-80 p-3 rounded-lg flex items-center gap-4 mt-8"><i class="fa-solid fa-right-from-bracket w-6 text-center"></i> Log Out</a>
+            </nav>
+        </div>
+        <div id="overlay" class="overlay fixed inset-0 bg-black opacity-0 hidden z-40"></div>
+
+        <div id="section-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 opacity-0">
+            <div id="modal-content-wrapper" class="modal-content-wrapper bg-white rounded-xl shadow-xl p-6 max-w-lg w-full transform scale-95">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 id="modal-title" class="text-2xl font-bold text-gray-800"></h3>
+                    <button id="modal-close-btn" class="text-gray-400 hover:text-gray-800 text-3xl focus:outline-none">&times;</button>
+                </div>
+                <div id="modal-content" class="max-h-[60vh] overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <header class="bg-gray-800 text-white p-4 flex items-center justify-between flex-shrink-0 shadow-md z-10">
+            <div class="flex items-center gap-4">
+                <button id="hamburger-btn" class="text-2xl focus:outline-none focus:ring-2 focus:ring-white rounded"><i class="fas fa-bars"></i></button>
+                <h1 class="text-xl font-bold">J.A.R.V.I.S.</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                 <button id="settings-btn" class="text-xl focus:outline-none focus:ring-2 focus:ring-white rounded"><i class="fas fa-cog"></i></button>
+                <div id="status-indicator" class="w-3 h-3 bg-green-400 rounded-full" title="Online"></div>
+            </div>
+        </header>
+
+        <div id="chat-window" class="flex-1 p-6 overflow-y-auto bg-gray-50 space-y-6"></div>
+
+        <div id="typing-indicator" class="hidden flex items-center space-x-2 p-6 pt-0">
+            <i class="fa-solid fa-robot text-2xl text-gray-500"></i>
+            <div class="ai-typing-indicator bg-gray-200 rounded-full p-3 px-4">
+                <span class="inline-block w-2 h-2 bg-gray-500 rounded-full"></span>
+                <span class="inline-block w-2 h-2 bg-gray-500 rounded-full"></span>
+                <span class="inline-block w-2 h-2 bg-gray-500 rounded-full"></span>
+            </div>
+        </div>
+
+        <footer class="p-4 bg-white border-t border-gray-200 flex-shrink-0">
+            <div class="flex items-center gap-3">
+                 <button type="button" id="regenerate-btn" class="hidden p-3 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400" title="Regenerate Response">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                </button>
+                <form id="chat-form" class="flex-1 flex items-center gap-3">
+                    <input type="text" id="chat-input" placeholder="Ask J.A.R.V.I.S...." class="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-shadow pl-5">
+                     <button type="button" id="briefing-btn" class="w-12 h-12 bg-purple-600 text-white rounded-full flex items-center justify-center hover:bg-purple-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500 flex-shrink-0 shadow-lg" title="Get Daily Briefing">
+                        <i class="fa-solid fa-sun text-xl"></i>
+                    </button>
+                    <button type="submit" id="action-btn" class="w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-shrink-0 shadow-lg">
+                        <i id="action-icon" class="fa-solid fa-microphone text-xl"></i>
+                    </button>
+                </form>
+            </div>
+        </footer>
+    </div>
+
+    <div id="voice-animation-overlay" class="hidden fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center">
+        <div class="voice-animation-wave"></div><div class="voice-animation-wave"></div><div class="voice-animation-wave"></div>
+        <p class="absolute bottom-20 text-white text-lg font-medium">Listening...</p>
+    </div>
+    
+    <script type="module">
+        // --- START: Gemini API Key ---
+        const GEMINI_API_KEY = "AIzaSyAzDWVGYDiT9qg1EEO7COYBUgwvKLKazT0";
+        // --- END: Gemini API Key ---
+
+        const elements = {
+            splashScreen: document.getElementById('splash-screen'),
+            loginContainer: document.getElementById('login-container'),
+            loginForm: document.getElementById('login-form'),
+            nameInput: document.getElementById('name-input'),
+            emailInput: document.getElementById('email-input'),
+            chatContainer: document.getElementById('chat-container'), chatWindow: document.getElementById('chat-window'),
+            chatForm: document.getElementById('chat-form'), chatInput: document.getElementById('chat-input'),
+            typingIndicator: document.getElementById('typing-indicator'), briefingBtn: document.getElementById('briefing-btn'),
+            actionBtn: document.getElementById('action-btn'), actionIcon: document.getElementById('action-icon'),
+            hamburgerBtn: document.getElementById('hamburger-btn'), sidebar: document.getElementById('sidebar'),
+            closeBtn: document.getElementById('close-btn'), overlay: document.getElementById('overlay'),
+            sidebarLinks: document.querySelectorAll('.sidebar-link'), sectionModal: document.getElementById('section-modal'),
+            modalTitle: document.getElementById('modal-title'), modalContent: document.getElementById('modal-content'),
+            modalContentWrapper: document.getElementById('modal-content-wrapper'),
+            modalCloseBtn: document.getElementById('modal-close-btn'), voiceAnimationOverlay: document.getElementById('voice-animation-overlay'),
+            regenerateBtn: document.getElementById('regenerate-btn'), settingsBtn: document.getElementById('settings-btn'),
+            logoutBtn: document.getElementById('logout-btn')
+        };
+
+        let userName = '', userEmail = '';
+        let chatHistory = [];
+        let reminders = [];
+        let isVoiceEnabled = true, selectedVoice = null, voices = [];
+
+        function startApp() {
+            setTimeout(() => {
+                elements.splashScreen.classList.add('hidden');
+                loadUserData();
+            }, 3000);
+        }
+        
+        function loadUserData() {
+            userName = localStorage.getItem('jarvisUserName');
+            userEmail = localStorage.getItem('jarvisUserEmail');
+            
+            if (userName && userEmail) {
+                const savedHistory = localStorage.getItem('jarvisChatHistory');
+                chatHistory = savedHistory ? JSON.parse(savedHistory) : [];
+                
+                const savedReminders = localStorage.getItem('jarvisReminders');
+                reminders = savedReminders ? JSON.parse(savedReminders) : [];
+
+                elements.loginContainer.classList.add('hidden');
+                elements.chatContainer.classList.remove('hidden');
+                
+                renderChat();
+                if (chatHistory.length === 0) {
+                    const welcomeMsg = `Welcome back, ${userName}. How can I help you today?`;
+                    updateConversation({ role: "model", parts: [{ text: welcomeMsg }] });
+                }
+            } else {
+                elements.loginContainer.classList.remove('hidden');
+                elements.chatContainer.classList.add('hidden');
+            }
+        }
+
+        elements.loginForm.addEventListener('submit', e => {
+            e.preventDefault();
+            userName = elements.nameInput.value.trim(); 
+            userEmail = elements.emailInput.value.trim();
+            localStorage.setItem('jarvisUserName', userName);
+            localStorage.setItem('jarvisUserEmail', userEmail);
+            elements.loginContainer.classList.add('hidden');
+            elements.chatContainer.classList.remove('hidden');
+            const welcomeMsg = `Hello ${userName}. I am J.A.R.V.I.S. How may I assist you today?`;
+            updateConversation({ role: "model", parts: [{ text: welcomeMsg }] });
+        });
+
+        elements.logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('jarvisUserName');
+            localStorage.removeItem('jarvisUserEmail');
+            localStorage.removeItem('jarvisChatHistory');
+            localStorage.removeItem('jarvisReminders');
+            location.reload();
+        });
+        
+        function updateConversation(newMessage) {
+            chatHistory.push(newMessage);
+            localStorage.setItem('jarvisChatHistory', JSON.stringify(chatHistory));
+            renderChat();
+        }
+
+        function renderChat() {
+            elements.chatWindow.innerHTML = '';
+            chatHistory.forEach(msg => addMessage(msg.role === 'user' ? 'user' : 'ai', msg.parts[0].text, false));
+            elements.chatWindow.scrollTop = elements.chatWindow.scrollHeight;
+        }
+
+        function addMessage(sender, text, animate = true) {
+            const bubble = document.createElement('div');
+            bubble.classList.add('chat-bubble', 'max-w-xl', 'p-4', 'rounded-2xl', 'shadow-md');
+            if (animate) bubble.classList.add('opacity-0', 'transform', 'translate-y-4');
+
+            if (sender === 'user') {
+                bubble.classList.add('bg-indigo-600', 'text-white', 'self-end', 'rounded-br-lg');
+                bubble.innerHTML = `<p>${text}</p>`;
+            } else {
+                bubble.classList.add('bg-white', 'text-gray-800', 'self-start', 'rounded-bl-lg', 'relative');
+                bubble.innerHTML = `<div class="message-content">${text}</div>`;
+                const toolbar = document.createElement('div');
+                toolbar.classList.add('message-toolbar', 'absolute', '-bottom-3', 'right-1', 'flex', 'items-center', 'gap-1');
+                
+                toolbar.innerHTML = `
+                    <button class="voice-toggle-btn w-7 h-7 flex items-center justify-center bg-white rounded-full shadow hover:bg-gray-200"><i class="fa-solid fa-volume-high text-xs"></i></button>
+                    <button class="copy-btn w-7 h-7 flex items-center justify-center bg-white rounded-full shadow hover:bg-gray-200"><i class="fa-solid fa-copy text-xs"></i></button>
+                `;
+                bubble.appendChild(toolbar);
+
+                toolbar.querySelector('.voice-toggle-btn').addEventListener('click', e => {
+                    const icon = e.currentTarget.querySelector('i');
+                    if(speechSynthesis.speaking){
+                        speechSynthesis.cancel();
+                        icon.className = 'fa-solid fa-volume-high text-xs';
+                    } else {
+                        document.querySelectorAll('.voice-toggle-btn i').forEach(i => i.className = 'fa-solid fa-volume-high text-xs');
+                        speak(text, () => { icon.className = 'fa-solid fa-volume-high text-xs'; });
+                        icon.className = 'fa-solid fa-volume-xmark text-xs';
+                    }
+                });
+                toolbar.querySelector('.copy-btn').addEventListener('click', e => {
+                    navigator.clipboard.writeText(text.replace(/<[^>]*>/g, ''));
+                    const icon = e.currentTarget.querySelector('i');
+                    icon.className = 'fa-solid fa-check text-green-500';
+                    setTimeout(() => { icon.className = 'fa-solid fa-copy'; }, 1500);
+                });
+            }
+            elements.chatWindow.appendChild(bubble);
+            if (animate) setTimeout(() => bubble.classList.remove('opacity-0', 'translate-y-4'), 10);
+            elements.chatWindow.scrollTop = elements.chatWindow.scrollHeight;
+        }
+
+        elements.chatInput.addEventListener('input', () => {
+            elements.actionIcon.className = elements.chatInput.value.trim() ? 'fa-solid fa-paper-plane text-xl' : 'fa-solid fa-microphone text-xl';
+        });
+
+        elements.chatForm.addEventListener('submit', e => {
+            e.preventDefault();
+            if (elements.chatInput.value.trim()) sendMessage(elements.chatInput.value.trim());
+        });
+
+        elements.actionBtn.addEventListener('click', e => {
+            if (elements.chatInput.value.trim() === '' && window.SpeechRecognition) {
+                e.preventDefault(); 
+                if (recognition) recognition.start();
+            }
+        });
+        
+        elements.briefingBtn.addEventListener('click', () => sendMessage("Give me my daily briefing."));
+
+        function sendMessage(message) {
+            if(!message) return;
+            elements.regenerateBtn.classList.add('hidden');
+            updateConversation({ role: "user", parts: [{ text: message }] });
+            elements.chatInput.value = '';
+            elements.actionIcon.className = 'fa-solid fa-microphone text-xl';
+            getAIResponse();
+        }
+
+        async function getAIResponse(regenerate = false) {
+            elements.typingIndicator.classList.remove('hidden');
+            elements.chatWindow.scrollTop = elements.chatWindow.scrollHeight;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+            const systemPrompt = `You are 'J.A.R.V.I.S.', a witty, helpful AI. Today is ${new Date().toDateString()}. If the user asks for a daily briefing, provide the date, a quote of the day, a word of the day, and a historical fact for today. If a user asks to be reminded of something, respond with ONLY a JSON object like this: {"action": "set_reminder", "payload": {"text": "the reminder text"}} and nothing else. For all other queries, respond conversationally. Format your responses with markdown (e.g., **bold**, *italics*).`;
+            
+            let historyForApi = [...chatHistory];
+            if (regenerate) {
+                historyForApi.pop(); 
+            }
+
+            const payload = { contents: historyForApi, systemInstruction: { parts: [{ text: systemPrompt }] } };
+            let responseText = "My apologies, I seem to have encountered an internal error.";
+
+            try {
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+                const result = await response.json();
+                responseText = result.candidates?.[0]?.content?.parts?.[0]?.text || responseText;
+                
+                try {
+                    const potentialJson = JSON.parse(responseText);
+                    if (potentialJson.action === 'set_reminder') {
+                        saveReminder(potentialJson.payload.text);
+                        responseText = `Of course. I've set a reminder for you: "${potentialJson.payload.text}".`;
+                    }
+                } catch (e) { /* Not a JSON reminder */ }
+
+            } catch (error) { console.error("Gemini API Error:", error); responseText = `Error: ${error.message}`; }
+            finally {
+                elements.typingIndicator.classList.add('hidden');
+                const finalMessage = { role: "model", parts: [{ text: responseText }] };
+                if (regenerate) {
+                   chatHistory[chatHistory.length - 1] = finalMessage; 
+                } else {
+                   chatHistory.push(finalMessage);
+                }
+                localStorage.setItem('jarvisChatHistory', JSON.stringify(chatHistory));
+                renderChat();
+                speak(responseText);
+                elements.regenerateBtn.classList.remove('hidden');
+            }
+        }
+        
+        elements.regenerateBtn.addEventListener('click', () => {
+            elements.regenerateBtn.classList.add('hidden');
+            if (chatHistory.findLastIndex(m => m.role === 'model') !== -1) getAIResponse(true);
+        });
+
+        function showModal(title, content) {
+            elements.modalTitle.textContent = title;
+            elements.modalContent.innerHTML = content;
+            elements.sectionModal.classList.remove('hidden');
+            setTimeout(() => {
+                elements.sectionModal.classList.remove('opacity-0');
+                elements.modalContentWrapper.classList.remove('scale-95');
+            }, 10);
+        }
+        function hideModal() {
+             elements.sectionModal.classList.add('opacity-0');
+            elements.modalContentWrapper.classList.add('scale-95');
+            setTimeout(() => elements.sectionModal.classList.add('hidden'), 400);
+        }
+
+        elements.hamburgerBtn.addEventListener('click', () => { elements.sidebar.classList.remove('-translate-x-full'); elements.overlay.classList.remove('hidden'); elements.overlay.classList.add('opacity-50'); });
+        const closeSidebar = () => { elements.sidebar.classList.add('-translate-x-full'); elements.overlay.classList.remove('opacity-50'); setTimeout(() => elements.overlay.classList.add('hidden'), 400); };
+        elements.closeBtn.addEventListener('click', closeSidebar);
+        elements.overlay.addEventListener('click', closeSidebar);
+        
+        elements.sidebarLinks.forEach(link => {
+            link.addEventListener('click', e => {
+                e.preventDefault();
+                const section = e.currentTarget.dataset.section;
+                let content = '';
+                if(section === 'about') content = `<p>AI Assistant: <strong>J.A.R.V.I.S.</strong></p><div class="mt-4 p-3 bg-gray-100 rounded-lg"><h4 class="font-semibold">User:</h4><p><strong>Name:</strong> ${userName}</p><p><strong>Email:</strong> ${userEmail}</p></div>`;
+                if(section === 'history') content = `<div class="space-y-2">${chatHistory.map(msg => `<div class="p-2 rounded-lg ${msg.role === 'user' ? 'bg-indigo-100' : 'bg-gray-100'}"><strong class="capitalize">${msg.role === 'user' ? 'You' : 'J.A.R.V.I.S.'}:</strong> ${msg.parts[0].text}</div>`).join('') || '<p>No history yet.</p>'}</div>`;
+                if(section === 'reminders') content = getRemindersContent();
+                if(section === 'owner') content = `<div class="text-center"><p class="text-lg font-medium">This application was created by:</p><p class="text-2xl font-bold text-indigo-600 mt-2">Abhilash Praharaju</p></div>`;
+                showModal(section.charAt(0).toUpperCase() + section.slice(1), content);
+                closeSidebar();
+            });
+        });
+        elements.modalCloseBtn.addEventListener('click', hideModal);
+
+        elements.settingsBtn.addEventListener('click', () => {
+            const settingsContent = `
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <label for="voice-toggle" class="font-medium text-gray-700">Enable Voice Response</label>
+                        <label class="switch">
+                            <input type="checkbox" id="voice-toggle" ${isVoiceEnabled ? 'checked' : ''}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div>
+                        <label for="voice-select" class="block font-medium text-gray-700 mb-2">Select Voice</label>
+                        <select id="voice-select" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></select>
+                    </div>
+                </div>
+            `;
+            showModal('Settings', settingsContent);
+            document.getElementById('voice-toggle').addEventListener('change', e => { isVoiceEnabled = e.target.checked; });
+            const voiceSelect = document.getElementById('voice-select');
+            populateVoiceList(voiceSelect);
+            voiceSelect.addEventListener('change', e => { selectedVoice = voices[e.target.value]; });
+        });
+
+        function saveReminder(text) {
+            reminders.push({ text, createdAt: new Date().toISOString() });
+            localStorage.setItem('jarvisReminders', JSON.stringify(reminders));
+        }
+        function getRemindersContent() {
+             if (reminders.length === 0) return '<p class="text-gray-500">You have no reminders set.</p>';
+             return `<div id="reminders-list" class="space-y-2">${reminders.map(r => {
+                const date = new Date(r.createdAt).toLocaleString();
+                return `<div class="bg-gray-100 p-3 rounded-lg"><p>${r.text}</p><p class="text-xs text-gray-500">${date}</p></div>`
+             }).join('')}</div>`;
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+            
+            recognition.onstart = () => elements.voiceAnimationOverlay.classList.remove('hidden');
+            recognition.onresult = e => sendMessage(e.results[0][0].transcript);
+            recognition.onend = () => elements.voiceAnimationOverlay.classList.add('hidden');
+            recognition.onerror = e => { 
+                console.error(`Speech recognition error: ${e.error}`);
+                elements.voiceAnimationOverlay.classList.add('hidden');
+            }
+        }
+
+        function speak(text, onEndCallback) {
+            if (!isVoiceEnabled || !text) {
+                if(onEndCallback) onEndCallback(); return;
+            }
+            speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text.replace(/<[^>]*>/g, ''));
+            if (selectedVoice) utterance.voice = selectedVoice;
+            if (onEndCallback) utterance.onend = onEndCallback;
+            speechSynthesis.speak(utterance);
+        }
+
+        function populateVoiceList(selectElement) {
+            voices = speechSynthesis.getVoices();
+            if(!voices.length) {
+                setTimeout(() => populateVoiceList(selectElement), 100);
+                return;
+            };
+            selectElement.innerHTML = voices.map((voice, i) => `<option value="${i}">${voice.name} (${voice.lang})${voice.default ? ' — DEFAULT' : ''}</option>`).join('');
+            if (selectedVoice) selectElement.value = voices.indexOf(selectedVoice);
+        }
+        speechSynthesis.onvoiceschanged = () => {
+            const select = document.getElementById('voice-select');
+            if (select) populateVoiceList(select);
+        };
+        
+        startApp();
+    </script>
+</body>
+</html>
+
+
